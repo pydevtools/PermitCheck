@@ -5,7 +5,7 @@ import requests
 from xml.dom import minidom
 import xml.etree.ElementTree as ET
 
-from legallint.utils import *
+from permitcheck.utils import read_json, write_json, get_basedir, get_lines
 
 
 class XML:

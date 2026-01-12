@@ -5,8 +5,8 @@ import importlib
 from typing import Dict, List, Optional, Set, Tuple
 
 from collections import defaultdict
-from legallint.utils import get_basedir, check_subclass
-from legallint.exceptions import PluginLoadError
+from permitcheck.utils import get_basedir, check_subclass
+from permitcheck.exceptions import PluginLoadError
 
 class Plugin(abc.ABC):
     @abc.abstractmethod
@@ -59,7 +59,7 @@ class PluginManager:
 
 
     def _load_plugin(self, lang: str, module: str) -> None:
-        \"\"\"Dynamically loads a plugin module.\"\"\"
+        """Dynamically loads a plugin module."""
         try:
             module = __import__(module)
             for attr in dir(module):
@@ -78,7 +78,8 @@ class PluginManager:
             return self.plugins[lang]
         
         available = ', '.join(self.plugins.keys()) if self.plugins else 'none'
-        print(f\"Plugin for '{lang}' is not loaded. Available plugins: {available}\")\n        return None
+        print(f"Plugin for '{lang}' is not loaded. Available plugins: {available}")
+        return None
     
     def get_supported_languages(self) -> List[str]:
         return list(self.plugins.keys())

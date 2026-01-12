@@ -1,36 +1,68 @@
 [project]
-name = "legallint"
-version = "1.1.3"
-description = "LegalLint: A multi-language license compliance tool"
+name = "permitcheck"
+version = "2.0.0"
+description = "A fast, modern license compliance checker with parallel processing, smart caching, and multiple output formats"
 authors = [
-    {name = "Kiran Kumar Kotari",email = "kirankotari@live.com"}
+    {name = "Kiran Kumar Kotari", email = "kirankotari@live.com"}
 ]
 license = {text = "Apache-2.0"}
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
+keywords = [
+    "license",
+    "compliance",
+    "spdx",
+    "security",
+    "dependency-management",
+    "license-checker",
+    "license-validation",
+    "ci-cd",
+    "python",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Software Distribution",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
 dependencies = [
-    "requests (>=2.32.3,<3.0.0)",
-    "toml (>=0.10.2,<0.11.0)",
-    "pyyaml (>=6.0.2,<7.0.0)",
+    "requests>=2.32.3,<3.0.0",
+    "toml>=0.10.2,<0.11.0",
+    "pyyaml>=6.0.2,<7.0.0",
 ]
 
 [project.urls]
-homepage = "https://github.com/kirankotari/legallint"
-repository = "https://github.com/kirankotari/legallint"
-documentation = "https://github.com/kirankotari/LegalLint/blob/main/README.md"
-"Bug Tracker" = "https://github.com/kirankotari/LegalLint/issues"
+Homepage = "https://github.com/kirankotari/permitcheck"
+Repository = "https://github.com/kirankotari/permitcheck"
+Documentation = "https://github.com/kirankotari/permitcheck/blob/main/README.md"
+"Bug Tracker" = "https://github.com/kirankotari/permitcheck/issues"
+Changelog = "https://github.com/kirankotari/permitcheck/blob/main/CHANGELOG.md"
+Discussions = "https://github.com/kirankotari/permitcheck/discussions"
 
 [project.scripts]
-legallint = "legallint.scripts.legallint_tool:main"
+permitcheck = "permitcheck.scripts.permitcheck_tool:main"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.4"
-pylint = "^3.3.4"
-black = "^25.1.0"
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-cov>=7.0.0",
+    "pylint>=3.3.0",
+    "black>=25.1.0",
+]
 
 
 [licenses]

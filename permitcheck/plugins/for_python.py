@@ -5,18 +5,26 @@ import os
 import re
 from importlib.metadata import distributions
 from typing import Dict, Set, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from legallint.plugin import Plugin
-from legallint.license.update import License
-from legallint.utils import get_pwd, get_lines, get_matching_keys, read_toml, flatten_set, exit
+from permitcheck.plugin import Plugin
+from permitcheck.license.update import License
+from permitcheck.utils import get_pwd, get_lines, get_matching_keys, read_toml, flatten_set, exit
+from permitcheck.core.cache import LicenseCache
+from permitcheck.core.matcher import LicenseMatcher
 
 
 class PythonPlugin(Plugin):
+    def __init__(self):
+        """Initialize plugin with cache and matcher."""
+        self.cache = LicenseCache()
+        self.matcher: Optional[LicenseMatcher] = None
+    
     def get_name(self) -> str:
         return "python"
 
     def run(self) -> Optional[Dict[str, Set[str]]]:
-        """Discover dependencies and return license information."""
+        """Discover dependencies and return license information with parallel processing."""
         deps = self._extracted_from(Toml) or self._extracted_from(Requirements)
         if not deps:
             print('no dependencies found in this directory')
@@ -27,7 +35,25 @@ class PythonPlugin(Plugin):
         deps = deps - Expand.not_installed
         
         pylic = PythonLicense()
-        return {dep: pylic.get_package_license(dep) for dep in deps}
+        
+        # Parallel license fetching
+        result = {}
+        with ThreadPoolExecutor(max_workers=min(10, len(deps))) as executor:
+            future_to_dep = {
+                executor.submit(pylic.get_package_license, dep): dep 
+                for dep in deps
+            }
+            
+            for future in as_completed(future_to_dep):
+                dep = future_to_dep[future]
+                try:
+                    licenses = future.result()
+                    result[dep] = licenses
+                except Exception as e:
+                    print(f"Error fetching license for {dep}: {e}")
+                    result[dep] = pylic.unknown
+        
+        return result
 
 
     def _extracted_from(self, cls) -> Optional[Set[str]]:
@@ -51,25 +77,42 @@ class PythonLicense(License):
     def __init__(self) -> None:
         super().__init__()
         self.spdx_set: Set[str] = super().get(is_print=False)
+        # Initialize matcher with SPDX licenses
+        self.matcher = LicenseMatcher(self.spdx_set, fuzzy_threshold=0.85)
+        # Initialize cache
+        self.cache = LicenseCache()
 
     def set_to_string(self, value_set: Set[str]) -> str:
         return next(iter(value_set)) if len(value_set) == 1 else str(value_set)
 
     def get_package_license(self, pkg_name: str) -> Set[str]:
-        """Get licenses for a package from various metadata sources."""
+        """Get licenses for a package from various metadata sources with caching."""
+        # Try cache first
+        cached = self.cache.get(pkg_name)
+        if cached:
+            return cached
+        
         try:
             dist = next(d for d in distributions() if d.metadata['Name'].lower() == pkg_name.lower())
 
-            # Try different metadata sources in order of preference
+            # Try different metadata sources in order of preference with confidence tracking
             pkg_licenses = (
                 self._get_license_from_metadata(dist, 'License') or
                 self._get_license_from_metadata(dist, 'License-Expression') or
                 self._get_license_from_classifiers(dist) or
-                self._get_license_from_files(dist)
+                self._get_license_from_files(dist, 'LICENSE') or
+                self._get_license_from_files(dist, 'LICENSE.txt') or
+                self._get_license_from_files(dist, 'LICENSE.md') or
+                self._get_license_from_files(dist, 'COPYING') or
+                self._get_license_from_readme(dist)
             )
             
             if pkg_licenses and len(pkg_licenses) < 3:
-                return pkg_licenses
+                # Normalize licenses using matcher
+                normalized = self.matcher.normalize_license_set(pkg_licenses)
+                # Cache the result
+                self.cache.set(pkg_name, normalized)
+                return normalized
 
         except StopIteration:
             print(f"Package '{pkg_name}' not found.")
@@ -98,18 +141,60 @@ class PythonLicense(License):
 
 
     # Helper function to check LICENSE files in the distribution
-    def _get_license_from_files(self, dist):
+    def _get_license_from_files(self, dist, filename='LICENSE'):
         """Extract license from LICENSE files in package."""
         pkg_licenses = set()
-        for each in dist.files:
-            if 'LICENSE' in each.name.upper():
-                license_path = each.locate().as_posix()
-                license_content = dist.read_text(license_path)
-                pkg_licenses |= self._validate_license(license_content)
+        try:
+            for each in dist.files or []:
+                if filename.upper() in each.name.upper():
+                    try:
+                        license_content = each.read_text()
+                        pkg_licenses |= self._validate_license(license_content)
+                        if pkg_licenses:
+                            return pkg_licenses
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        return pkg_licenses
+    
+    def _get_license_from_readme(self, dist):
+        """Extract license from README files."""
+        pkg_licenses = set()
+        readme_patterns = ['README', 'README.md', 'README.rst', 'README.txt']
+        
+        try:
+            for each in dist.files or []:
+                if any(pattern in each.name.upper() for pattern in readme_patterns):
+                    try:
+                        content = each.read_text()
+                        # Look for license patterns in README
+                        license_patterns = [
+                            r'##?\s*License\s*\n\s*([A-Za-z0-9\-\.\s]+)',
+                            r'License:\s*([A-Za-z0-9\-\.\s]+)',
+                            r'Licensed under\s+(?:the\s+)?([A-Za-z0-9\-\.\s]+)',
+                            r'\*\*License\*\*:\s*([A-Za-z0-9\-\.\s]+)',
+                        ]
+                        
+                        for pattern in license_patterns:
+                            matches = re.findall(pattern, content, re.IGNORECASE)
+                            for match in matches:
+                                pkg_licenses |= self._validate_license(match.strip())
+                                if pkg_licenses:
+                                    return pkg_licenses
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         return pkg_licenses
     
     def _validate_license(self, license_content):
-        """Validate and extract known licenses from content."""
+        """Validate and extract known licenses from content using matcher."""
+        # Use the matcher to find licenses in content
+        if hasattr(self, 'matcher') and self.matcher:
+            return self.matcher.match(license_content)
+        
+        # Fallback to simple string matching
         found_licenses = {
             lic_name for lic_name in self.spdx_set 
             if lic_name in license_content
@@ -223,7 +308,12 @@ class Toml:
     @classmethod
     def _clean_version_specifier(cls, dep_string):
         """Remove version specifiers from dependency string."""
-        for separator in ['>=', '==', '<=', '~=', '!=']:
+        # Remove parenthesized version specs (e.g., "package (>=1.0,<2.0)")
+        if '(' in dep_string:
+            return dep_string.split('(')[0].strip()
+        
+        # Handle inline version specs (e.g., "package>=1.0")
+        for separator in ['>=', '==', '<=', '~=', '!=', '<', '>']:
             if separator in dep_string:
                 return dep_string.split(separator)[0].strip()
         return dep_string.strip()

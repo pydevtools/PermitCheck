@@ -20,7 +20,7 @@ def get_lines(fpath: str) -> List[str]:
     return []
 
 def get_basedir() -> str:
-    return os.path.split(os.path.abspath(sys.modules['legallint'].__file__))[0]
+    return os.path.split(os.path.abspath(sys.modules['permitcheck'].__file__))[0]
 
 def check_subclass(subclass: type, cls: type) -> bool:
     return False if subclass is cls else issubclass(subclass, cls)

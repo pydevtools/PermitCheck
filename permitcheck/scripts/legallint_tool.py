@@ -3,20 +3,20 @@ from __future__ import absolute_import
 import sys
 import argparse
 
-import legallint
-from legallint.plugin import PluginManager
-from legallint.license.update import License
-from legallint.lint import PermitCheck
-from legallint.exceptions import (
+import permitcheck
+from permitcheck.plugin import PluginManager
+from permitcheck.license.update import License
+from permitcheck.lint import PermitCheck
+from permitcheck.exceptions import (
     PermitCheckError,
     ConfigurationError,
     PluginLoadError
 )
 
 def main():
-    parser = argparse.ArgumentParser(description=legallint.__description__)
+    parser = argparse.ArgumentParser(description=permitcheck.__description__)
     parser.add_argument('--verbose', action='store_true', help="Enable verbose mode")
-    parser.add_argument('-v', '--version', action='version', version=f'PermitCheck {legallint.__version__}')
+    parser.add_argument('-v', '--version', action='version', version=f'PermitCheck {permitcheck.__version__}')
 
     parser.add_argument(
         '-l', '--lang',

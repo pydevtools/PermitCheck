@@ -5,9 +5,9 @@ class NpmPlugin(Plugin):
         return "npm"
 
     def run(self):
-        deps = None
-        # print(f"npm deps found {deps}")
-        return
+        """NPM plugin not yet implemented."""
+        print("NPM support is not yet implemented.")
+        return None
 
     def load_settings(self):
         return None

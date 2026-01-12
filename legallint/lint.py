@@ -1,80 +1,140 @@
 import os
+from typing import Dict, Set, Optional, Tuple
 from legallint.utils import read_yaml, exit
-from legallint.exceptions import LegalLintError, LegalLintWarning, LegalLintInfo
+from legallint.exceptions import (
+    PermitCheckError, 
+    PermitCheckWarning, 
+    PermitCheckInfo,
+    ConfigurationError
+)
 
 class Settings:
     basedir = os.getcwd()
-    allowed_licenses = set()
-    trigger_error_licenses = set()
-    skip_libraries = set()
+    allowed_licenses: Set[str] = set()
+    trigger_error_licenses: Set[str] = set()
+    skip_libraries: Set[str] = set()
 
-    config_file = 'legallint.yaml'
+    config_file = 'permitcheck.yaml'
 
     @classmethod
-    def load(cls, settings):
+    def load(cls, settings: Optional[Tuple[Set[str], Set[str], Set[str]]]) -> None:
+        """Load settings from tuple or config file."""
         if (not settings) and (not os.path.isfile(f"{cls.basedir}/{cls.config_file}")):
-            print("no legallint.yaml setting found.")
-            exit()
+            raise ConfigurationError(
+                f"No {cls.config_file} found in {cls.basedir}. "
+                "Please create a configuration file or provide settings."
+            )
 
         if not settings:
-            config = read_yaml(f"{cls.basedir}/{cls.config_file}")
-            cls.allowed_licenses = set(config.get('allowed_licenses', []))
-            cls.trigger_error_licenses = set(config.get('trigger_error_licenses', []))
-            cls.skip_libraries = set(config.get('skip_libraries', []) or [])
+            try:
+                config = read_yaml(f"{cls.basedir}/{cls.config_file}")
+                cls._validate_config(config)
+                cls.allowed_licenses = set(config.get('allowed_licenses', []))
+                cls.trigger_error_licenses = set(config.get('trigger_error_licenses', []))
+                cls.skip_libraries = set(config.get('skip_libraries', []) or [])
+            except Exception as e:
+                raise ConfigurationError(f"Failed to load configuration: {e}")
 
         if settings:
             cls.allowed_licenses, cls.trigger_error_licenses, cls.skip_libraries = settings
 
+        # Add base license identifiers (e.g., "Apache" from "Apache-2.0")
         cls.allowed_licenses |= {key.split('-')[0] for key in cls.allowed_licenses}
         cls.trigger_error_licenses |= {key.split('-')[0] for key in cls.trigger_error_licenses}
+    
+    @classmethod
+    def _validate_config(cls, config: Dict) -> None:
+        """Validate configuration file contents."""
+        if not isinstance(config, dict):
+            raise ConfigurationError("Configuration must be a dictionary")
+        
+        # Check for conflicting licenses
+        if 'allowed_licenses' in config and 'trigger_error_licenses' in config:
+            allowed = set(config['allowed_licenses'])
+            errors = set(config['trigger_error_licenses'])
+            conflicts = allowed & errors
+            if conflicts:
+                raise ConfigurationError(
+                    f"Conflicting licenses in configuration: {conflicts} "
+                    "cannot be both allowed and trigger errors"
+                )
 
-class LegalLint:
-    def __init__(self, deps, settings=None):
+class PermitCheck:
+    def __init__(self, deps: Optional[Dict[str, Set[str]]], settings: Optional[Tuple[Set[str], Set[str], Set[str]]] = None) -> None:
         Settings.load(settings)
-        self.allowed = set()
-        self.errors = set()
-        self.warnings = set()
+        self.allowed: Set[str] = set()
+        self.errors: Set[str] = set()
+        self.warnings: Set[str] = set()
         self.validate(deps)
 
-    def validate(self, deps):
-        marks = ('\u2714', '\u2716', '\u203C', 's') # check, error, warning
+    def _classify_dependency(self, dep_name: str, license_set: set) -> str:
+        """Classify a single dependency based on its licenses.
+        
+        Returns: 'error', 'allowed', 'warning', or 'skip'
+        """
+        if dep_name in Settings.skip_libraries:
+            return 'skip'
+        
+        # Check for trigger error licenses
+        for lic in license_set:
+            if lic in Settings.trigger_error_licenses:
+                return 'error'
+        
+        # Check for allowed licenses
+        for lic in license_set:
+            if lic in Settings.allowed_licenses:
+                return 'allowed'
+        
+        # If no error and no allowed, it's a warning
+        return 'warning'
+
+    def _print_dependency(self, dep_name: str, license_set: set, mark: str):
+        """Print a single dependency with its mark."""
+        print(f"{mark:<5} {dep_name:<20} {'; '.join(license_set)}")
+
+    def validate(self, deps: Optional[Dict[str, Set[str]]]) -> None:
+        """Validate all dependencies against license policies."""
+        marks: Dict[str, str] = {
+            'allowed': '\u2714',    # check mark
+            'error': '\u2716',      # error mark
+            'warning': '\u203C',    # warning mark
+            'skip': 's'             # skip mark
+        }
+        
         if deps is None:
             return
-        for dep, lic_set in deps.items():
-            if dep in Settings.skip_libraries:
-                continue
-            for lic in lic_set:
-                if lic in Settings.trigger_error_licenses:
-                    self.errors.add(dep)
-                    if dep in self.allowed:
-                        self.allowed.remove(dep)
-                    break
-                if lic in Settings.allowed_licenses:
-                    self.allowed.add(dep)
-            if dep not in self.errors and dep not in self.allowed:
-                self.warnings.add(dep)
-
-        if not len(Settings.trigger_error_licenses):
+        
+        # Classify all dependencies
+        classifications = {}
+        for dep_name, license_set in deps.items():
+            classification = self._classify_dependency(dep_name, license_set)
+            classifications[dep_name] = classification
+            
+            if classification == 'allowed':
+                self.allowed.add(dep_name)
+            elif classification == 'error':
+                self.errors.add(dep_name)
+            elif classification == 'warning':
+                self.warnings.add(dep_name)
+        
+        # If no trigger_error_licenses configured, warnings become errors
+        if not Settings.trigger_error_licenses:
             self.errors |= self.warnings
             self.warnings = set()
-
-        for dep, lic_set in deps.items():
-            if dep in self.allowed:
-                print(f"{marks[0]:<5} {dep:<20} {'; '.join(lic_set)}")
-            if dep in self.errors:
-                print(f"{marks[1]:<5} {dep:<20} {'; '.join(lic_set)}")
-            if dep in self.warnings:
-                print(f"{marks[2]:<5} {dep:<20} {'; '.join(lic_set)}")
-            if dep in Settings.skip_libraries:
-                print(f"{marks[3]:<5} {dep:<20} {'; '.join(lic_set)}")
-
-        if len(self.errors):
-            print(LegalLintError())
-            return
-        if len(self.warnings):
-            print(LegalLintWarning())
-            return
-        print(LegalLintInfo())
+        
+        # Print all dependencies with their marks
+        for dep_name, license_set in deps.items():
+            classification = classifications[dep_name]
+            mark = marks.get(classification, '')
+            self._print_dependency(dep_name, license_set, mark)
+        
+        # Print summary
+        if self.errors:
+            print(PermitCheckError())
+        elif self.warnings:
+            print(PermitCheckWarning())
+        else:
+            print(PermitCheckInfo())
 
 
 
