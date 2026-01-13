@@ -1,5 +1,3 @@
-from builtins import Exception, Warning
-
 class PermitCheckError(Exception):
     """Base class for all PermitCheck exceptions."""
     def __init__(self, message=None):

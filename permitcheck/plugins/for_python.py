@@ -158,35 +158,48 @@ class PythonLicense(License):
             pass
         return pkg_licenses
     
-    def _get_license_from_readme(self, dist):
-        """Extract license from README files."""
-        pkg_licenses = set()
+    def _find_readme_file(self, dist):
+        """Find README file in distribution."""
         readme_patterns = ['README', 'README.md', 'README.rst', 'README.txt']
-        
         try:
-            for each in dist.files or []:
-                if any(pattern in each.name.upper() for pattern in readme_patterns):
-                    try:
-                        content = each.read_text()
-                        # Look for license patterns in README
-                        license_patterns = [
-                            r'##?\s*License\s*\n\s*([A-Za-z0-9\-\.\s]+)',
-                            r'License:\s*([A-Za-z0-9\-\.\s]+)',
-                            r'Licensed under\s+(?:the\s+)?([A-Za-z0-9\-\.\s]+)',
-                            r'\*\*License\*\*:\s*([A-Za-z0-9\-\.\s]+)',
-                        ]
-                        
-                        for pattern in license_patterns:
-                            matches = re.findall(pattern, content, re.IGNORECASE)
-                            for match in matches:
-                                pkg_licenses |= self._validate_license(match.strip())
-                                if pkg_licenses:
-                                    return pkg_licenses
-                    except Exception:
-                        pass
+            for file in dist.files or []:
+                if any(pattern in file.name.upper() for pattern in readme_patterns):
+                    return file
         except Exception:
             pass
+        return None
+    
+    def _get_license_patterns(self):
+        """Return regex patterns for finding licenses in README."""
+        return [
+            r'##?\s*License\s*\n\s*([A-Za-z0-9\-\.\s]+)',
+            r'License:\s*([A-Za-z0-9\-\.\s]+)',
+            r'Licensed under\s+(?:the\s+)?([A-Za-z0-9\-\.\s]+)',
+            r'\*\*License\*\*:\s*([A-Za-z0-9\-\.\s]+)',
+        ]
+    
+    def _extract_licenses_from_text(self, content):
+        """Extract licenses from README text using regex patterns."""
+        pkg_licenses = set()
+        for pattern in self._get_license_patterns():
+            matches = re.findall(pattern, content, re.IGNORECASE)
+            for match in matches:
+                pkg_licenses |= self._validate_license(match.strip())
+                if pkg_licenses:
+                    return pkg_licenses
         return pkg_licenses
+    
+    def _get_license_from_readme(self, dist):
+        """Extract license from README files."""
+        readme_file = self._find_readme_file(dist)
+        if not readme_file:
+            return set()
+        
+        try:
+            content = readme_file.read_text()
+            return self._extract_licenses_from_text(content)
+        except Exception:
+            return set()
     
     def _validate_license(self, license_content):
         """Validate and extract known licenses from content using matcher."""

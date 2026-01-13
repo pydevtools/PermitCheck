@@ -62,10 +62,50 @@ dev = [
     "pytest-cov>=7.0.0",
     "pylint>=3.3.0",
     "black>=25.1.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+    "types-requests",
+    "types-PyYAML",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --strict-markers"
 
-[licenses]
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex (we handle this separately)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.permitcheck]
 allowed = ["MIT", "Apache-2.0", "BSD-3-Clause"]
 trigger_error = ["GPL-3.0", "AGPL-3.0", "Proprietary", "Unknown"]
 skip_libraries = []

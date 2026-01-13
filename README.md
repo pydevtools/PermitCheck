@@ -95,11 +95,18 @@ skip_libraries = []
 
 ## 📖 Documentation
 
-- [Installation Guide](docs/installation.md)
-- [Configuration](docs/configuration.md)
-- [Output Formats](docs/output-formats.md)
-- [CI/CD Integration](docs/ci-cd-integration.md)
-- [API Reference](docs/api-reference.md)
+**[📚 Complete Documentation](docs/)** - Full documentation index with guides and references
+
+**Quick Links**:
+- [Installation](docs/installation.md) - Setup and installation
+- [Usage Guide](docs/usage-guide.md) - Complete usage examples
+- [Configuration](docs/configuration.md) - Policy configuration
+- [CI/CD Integration](docs/ci-cd-integration.md) - Pipeline integration
+
+**For Contributors**:
+- [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute
+- [Adding Languages](docs/adding-language-support.md) - Plugin development
+- [Architecture](docs/architecture.md) - System design
 
 ## 🔧 CLI Options
 
