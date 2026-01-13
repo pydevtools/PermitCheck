@@ -226,7 +226,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 📞 Support
 
-- 📧 Email: kirankotari@live.com
 - 🐛 Issues: [GitHub Issues](https://github.com/kirankotari/permitcheck/issues)
 - 💬 Discussions: [GitHub Discussions](https://github.com/kirankotari/permitcheck/discussions)
 
